@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ректификация BLE</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a1a">
+  <style>
+    body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
+    .card { background: #1e1e1e; padding: 15px; border-radius: 12px; margin-top: 15px; }
+    button { background: #007bff; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; }
+    button:disabled { background: #444; }
+    .val { font-size: 24px; font-weight: bold; color: #00e676; }
+  </style>
+</head>
+<body>
+  <h2>Автоматика Ректификации</h2>
+  <button id="btnConnect" onclick="connectBLE()">Подключиться к ESP32</button>
+
+  <div class="card">
+    <div>Статус: <span id="bleStatus">Отключено</span></div>
+    <div>Температура куба: <span id="tempCube" class="val">--</span> °C</div>
+    <div>Мощность: <span id="pwr" class="val">--</span> Вт</div>
+  </div>
+
+  <div class="card">
+    <button onclick="sendCmd('PWR:3800')">3.8 кВт</button>
+    <button onclick="sendCmd('PWR:0')">Выключить</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
