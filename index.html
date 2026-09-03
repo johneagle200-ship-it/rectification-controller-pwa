@@ -130,14 +130,28 @@
       if (installBtn) installBtn.style.display = 'block';
     });
 
-    async function installPWA() {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log(`[PWA] Ответ на установку: ${outcome}`);
-      deferredPrompt = null;
-      document.getElementById('btnInstallPWA').style.display = 'none';
-    }
-  </script>
+async function installPWA() {
+  if (!deferredPrompt) return;
+  
+  const installBtn = document.getElementById('btnInstallPWA');
+  installBtn.disabled = true;
+  installBtn.innerText = "⏳ Установка (подождите 15–30 сек)...";
+
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  console.log(`[PWA] Ответ: ${outcome}`);
+
+  if (outcome === 'accepted') {
+    // Прячем кнопку только после согласия
+    installBtn.style.display = 'none';
+  } else {
+    // Если пользователь отменил — возвращаем кнопку
+    installBtn.disabled = false;
+    installBtn.innerText = "📲 Установить приложение";
+  }
+  
+  deferredPrompt = null;
+}
+</script>
 </body>
 </html>
