@@ -15,6 +15,11 @@
 
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #121212; color: #fff; padding: 15px; margin: 0; text-align: center; }
+    
+    .header { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 15px; }
+    .header h2 { margin: 0; }
+    .ver-badge { font-size: 12px; background: #2a2a2a; color: #00e676; padding: 2px 8px; border-radius: 10px; border: 1px solid #00e67644; font-weight: bold; }
+    
     .card { background: #1e1e1e; padding: 16px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     .device-info { font-size: 14px; color: #aaa; margin-bottom: 10px; }
     .status { font-weight: bold; color: #ff5252; }
@@ -30,14 +35,19 @@
     button:disabled { background: #2a2a2a; color: #666; cursor: not-allowed; }
 
     .val { font-size: 26px; font-weight: bold; color: #00e676; margin-top: 4px; }
+    .sw-info { font-size: 11px; color: #666; margin-top: -10px; margin-bottom: 15px; }
   </style>
 </head>
 <body>
 
-  <h2>Автоматика Ректификации</h2>
+  <div class="header">
+    <h2>Автоматика Ректификации</h2>
+    <span class="ver-badge">v1.0.1</span>
+  </div>
 
-  <!-- Кнопка установки PWA (появится автоматически при готовности браузера) -->
+  <!-- Кнопка установки PWA -->
   <button id="btnInstallPWA" class="btn-install" onclick="installPWA()">📲 Установить приложение</button>
+  <div id="swStatus" class="sw-info">SW: Проверка...</div>
 
   <!-- Блок управления BLE-устройством -->
   <div class="card">
@@ -71,10 +81,20 @@
 
   <!-- Регистрация Service Worker и обработка установки PWA -->
   <script>
+    const swStatusEl = document.getElementById('swStatus');
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('[PWA] Service Worker зарегистрирован:', reg.scope))
-        .catch(err => console.error('[PWA] Ошибка SW:', err));
+        .then(reg => {
+          console.log('[PWA] SW зарегистрирован:', reg.scope);
+          swStatusEl.innerText = "SW: Активен";
+        })
+        .catch(err => {
+          console.error('[PWA] Ошибка SW:', err);
+          swStatusEl.innerText = "SW: Ошибка (" + err.message + ")";
+        });
+    } else {
+      swStatusEl.innerText = "SW: Не поддерживается браузером";
     }
 
     let deferredPrompt = null;
