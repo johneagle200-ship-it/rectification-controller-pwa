@@ -6,18 +6,27 @@
   <title>Ректификация BLE</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#121212">
+  
+  <!-- Поддержка установки на iOS / Safari -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Колонка">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #121212; color: #fff; padding: 15px; margin: 0; text-align: center; }
     .card { background: #1e1e1e; padding: 16px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     .device-info { font-size: 14px; color: #aaa; margin-bottom: 10px; }
     .status { font-weight: bold; color: #ff5252; }
     .status.connected { color: #00e676; }
+    .status.pending { color: #ffca28; }
     
     .btn-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
     button { background: #007bff; color: white; border: none; padding: 10px 18px; font-size: 15px; font-weight: 600; border-radius: 8px; cursor: pointer; transition: 0.2s; }
     button:active { opacity: 0.8; }
     button.btn-danger { background: #dc3545; }
     button.btn-secondary { background: #444; }
+    button.btn-install { background: #28a745; width: 100%; margin-bottom: 15px; font-size: 16px; display: none; }
     button:disabled { background: #2a2a2a; color: #666; cursor: not-allowed; }
 
     .val { font-size: 26px; font-weight: bold; color: #00e676; margin-top: 4px; }
@@ -26,6 +35,9 @@
 <body>
 
   <h2>Автоматика Ректификации</h2>
+
+  <!-- Кнопка установки PWA (появится автоматически при готовности браузера) -->
+  <button id="btnInstallPWA" class="btn-install" onclick="installPWA()">📲 Установить приложение</button>
 
   <!-- Блок управления BLE-устройством -->
   <div class="card">
@@ -56,5 +68,31 @@
   </div>
 
   <script src="app.js"></script>
+
+  <!-- Регистрация Service Worker и обработка установки PWA -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('[PWA] Service Worker зарегистрирован:', reg.scope))
+        .catch(err => console.error('[PWA] Ошибка SW:', err));
+    }
+
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const installBtn = document.getElementById('btnInstallPWA');
+      if (installBtn) installBtn.style.display = 'block';
+    });
+
+    async function installPWA() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`[PWA] Ответ на установку: ${outcome}`);
+      deferredPrompt = null;
+      document.getElementById('btnInstallPWA').style.display = 'none';
+    }
+  </script>
 </body>
 </html>
