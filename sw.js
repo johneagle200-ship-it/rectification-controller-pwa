@@ -1,16 +1,19 @@
-const CACHE_NAME = 'pwa-rect-v3'; // подняли версию кэша
+const CACHE_NAME = 'pwa-rect-v5';
 const ASSETS = [
   './',
   './index.html',
   './app.js',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  './manifest.json'
 ];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) => {
+      // Игнорируем ошибки отдельных файлов, чтобы SW гарантированно встал
+      return Promise.allSettled(
+        ASSETS.map(url => cache.add(url).catch(err => console.warn('Не закеширован:', url)))
+      );
+    })
   );
   self.skipWaiting();
 });
