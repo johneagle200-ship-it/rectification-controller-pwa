@@ -5,51 +5,52 @@ const CHARACTERISTIC_TX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 let bluetoothDevice = null;
 let rxCharacteristic = null;
 let txCharacteristic = null;
-let isExplicitDisconnect = false; // Флаг: отключил ли пользователь связь вручную
+let isExplicitDisconnect = false;
+let reconnectTimer = null;
 
-// Инициализация при загрузке страницы
+// 1. Инициализация при загрузке страницы
 document.addEventListener("DOMContentLoaded", async () => {
   await checkSavedDevices();
 });
 
-// 1. Проверка ранее привязанных устройств
+// 2. Проверка ранее привязанных устройств и автоподключение
 async function checkSavedDevices() {
   if (navigator.bluetooth && navigator.bluetooth.getDevices) {
     try {
       const devices = await navigator.bluetooth.getDevices();
       if (devices.length > 0) {
-        bluetoothDevice = devices[0]; // Берем уже разрешенное устройство
-        
+        bluetoothDevice = devices[0];
         document.getElementById('deviceName').innerText = bluetoothDevice.name || "ESP32_Autoclave";
         
-        const btnConnect = document.getElementById('btnConnect');
-        btnConnect.innerText = "Подключить " + (bluetoothDevice.name || "ESP32");
-        btnConnect.classList.add("ready"); // Готов к быстрому соединению
-        
-        console.log("[BLE] Найдено запомненное устройство:", bluetoothDevice.name);
+        console.log("[BLE] Найдено запомненное устройство, пробуем подключиться...");
+        // Автоматически подключаемся без вызова окна
+        await bindAndConnect(bluetoothDevice);
       }
     } catch (err) {
-      console.warn("[BLE] Ошибка чтения getDevices():", err);
+      console.warn("[BLE] Автоподключение отклонено браузером (нужен клик):", err);
+      updateUI("disconnected");
     }
   }
 }
 
-// 2. Главная точка входа для кнопки "Подключиться"
+// 3. Главная точка входа для кнопки "Подключиться"
 async function connectOrReconnect() {
   isExplicitDisconnect = false;
+  clearTimeout(reconnectTimer);
 
-  // Если устройство уже в памяти — подключаемся к нему напрямую БЕЗ вызова системного окна
   if (bluetoothDevice) {
     await bindAndConnect(bluetoothDevice);
   } else {
-    // Если запускается впервые на устройстве — вызываем системный поиск
     await selectNewDevice();
   }
 }
 
-// 3. Выбор НОВОГО устройства (открывает системное окно)
+// 4. Выбор НОВОГО устройства (открывает системное диалоговое окно)
 async function selectNewDevice() {
   try {
+    isExplicitDisconnect = true; // Сбрасываем таймеры автореконнекта старого устройства
+    clearTimeout(reconnectTimer);
+
     if (bluetoothDevice && bluetoothDevice.gatt.connected) {
       bluetoothDevice.gatt.disconnect();
     }
@@ -59,17 +60,22 @@ async function selectNewDevice() {
       optionalServices: [SERVICE_UUID]
     });
 
+    isExplicitDisconnect = false;
     document.getElementById('deviceName').innerText = bluetoothDevice.name || "ESP32_Autoclave";
     await bindAndConnect(bluetoothDevice);
 
   } catch (err) {
-    console.log("[BLE] Выбор устройства отменен:", err);
+    console.log("[BLE] Выбор устройства отменён:", err);
+    updateUI("disconnected");
   }
 }
 
-// 4. Установление GATT-сессии
+// 5. Установление GATT-сессии
 async function bindAndConnect(device) {
+  if (!device) return;
+
   try {
+    clearTimeout(reconnectTimer);
     updateUI("connecting");
     
     device.removeEventListener('gattserverdisconnected', onDisconnected);
@@ -83,6 +89,7 @@ async function bindAndConnect(device) {
     txCharacteristic = await service.getCharacteristic(CHARACTERISTIC_TX_UUID);
 
     await txCharacteristic.startNotifications();
+    txCharacteristic.removeEventListener('characteristicvaluechanged', handleTelemetry);
     txCharacteristic.addEventListener('characteristicvaluechanged', handleTelemetry);
 
     updateUI("connected");
@@ -91,43 +98,54 @@ async function bindAndConnect(device) {
   } catch (err) {
     console.error("[BLE] Ошибка GATT:", err);
     
-    // Если обрыв произошел во время работы — пробуем автоматически переподключиться
     if (!isExplicitDisconnect) {
-      console.log("[BLE] Попытка повторного автоподключения через 2 сек...");
-      setTimeout(() => { bindAndConnect(device); }, 2000);
+      updateUI("reconnecting");
+      scheduleReconnect(2000);
     } else {
-      onDisconnected();
+      updateUI("disconnected");
     }
   }
 }
 
-// 5. Отключение по кнопке пользователя
+// 6. Отключение по кнопке пользователя
 function disconnectBLE() {
   isExplicitDisconnect = true;
+  clearTimeout(reconnectTimer);
+
   if (bluetoothDevice && bluetoothDevice.gatt.connected) {
     bluetoothDevice.gatt.disconnect();
   }
   onDisconnected();
 }
 
-// 6. Обработчик потери связи
+// 7. Обработчик потери связи
 function onDisconnected() {
   rxCharacteristic = null;
   txCharacteristic = null;
 
-  updateUI("disconnected");
   document.getElementById('tempCube').innerText = "-- °C";
   document.getElementById('pwr').innerText = "-- Вт";
 
-  // Автореконнект, если связь отвалилась сама (ESP32 перезагрузилась / ушла по питанию)
   if (!isExplicitDisconnect && bluetoothDevice) {
-    console.log("[BLE] Потеря связи с ESP32. Ожидание восстановления...");
+    console.log("[BLE] Потеря связи. Ожидание восстановления...");
     updateUI("reconnecting");
-    setTimeout(() => { bindAndConnect(bluetoothDevice); }, 3000);
+    scheduleReconnect(3000);
+  } else {
+    updateUI("disconnected");
   }
 }
 
-// 7. Обновление интерфейса
+// Планировщик повторных попыток без наслоения таймеров
+function scheduleReconnect(delayMs) {
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => {
+    if (!isExplicitDisconnect && bluetoothDevice) {
+      bindAndConnect(bluetoothDevice);
+    }
+  }, delayMs);
+}
+
+// 8. Обновление интерфейса
 function updateUI(state) {
   const statusEl = document.getElementById('bleStatus');
   const btnConnect = document.getElementById('btnConnect');
@@ -146,12 +164,14 @@ function updateUI(state) {
   else if (state === "reconnecting") {
     statusEl.innerText = "Поиск ESP32...";
     statusEl.className = "status pending";
+    btnConnect.style.display = "none";
+    btnDisconnect.style.display = "inline-block"; // Даем возможность отменить поиск
   }
   else {
     statusEl.innerText = "Отключено";
     statusEl.className = "status";
     btnConnect.style.display = "inline-block";
-    btnConnect.innerText = bluetoothDevice ? ("Подключить " + bluetoothDevice.name) : "Найти ESP32";
+    btnConnect.innerText = bluetoothDevice ? ("Подключить " + (bluetoothDevice.name || "ESP32")) : "Найти ESP32";
     btnDisconnect.style.display = "none";
   }
 }
