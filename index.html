@@ -88,11 +88,36 @@
         .then(reg => {
           console.log('[PWA] SW зарегистрирован:', reg.scope);
           swStatusEl.innerText = "SW: Активен";
+
+          // Принудительно проверяем наличие новой версии на GitHub
+          reg.update();
+
+          // Отслеживаем момент скачивания новой версии sw.js
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            swStatusEl.innerText = "SW: Загрузка обновления...";
+
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // Перезагружаем страницу после скачивания новых файлов
+                window.location.reload();
+              }
+            });
+          });
         })
         .catch(err => {
           console.error('[PWA] Ошибка SW:', err);
           swStatusEl.innerText = "SW: Ошибка (" + err.message + ")";
         });
+
+      // Страховка: если активный SW изменился, обновляем интерфейс
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
     } else {
       swStatusEl.innerText = "SW: Не поддерживается браузером";
     }
